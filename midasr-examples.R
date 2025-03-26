@@ -188,11 +188,17 @@ cbfc$bestlist
 
 
 
+
+
+
+##### ------------------------------------------------------------------------------------- 
 # MIDAS Matlab toolbox example ----------------------------------------------------------------------
 
 ##  Get the data
 data("USqgdp")
 data("USpayems")
+
+
 
 ## Convert to ts with the exact sample used in MIDAS Matlab toolbox
 y <- window(USqgdp, end = c(2011, 2))
@@ -206,6 +212,8 @@ xg <- diff(log(x))*100
 nx <- ts(c(NA, xg, NA, NA), start = start(x), frequency = 12)
 ny <- ts(c(rep(NA, 33), yg, NA), start = start(x), frequency = 4)
 
+nx
+ny
 
 ## Replicate the graph of the data
 plot.ts(nx, xlab = "Time", ylab = "Percentages", col = 4, ylim = c(-5, 6))
@@ -215,6 +223,9 @@ lines(ny, col = 2)
 ## Use the same sample as in MIDAS Matlab toolbox
 xx <- window(nx, start = c(1985, 1), end = c(2009, 3))
 yy <- window(ny, start = c(1985, 1), end = c(2009, 1))
+
+xx
+yy
 
 ## Estimate the models
 beta0 <- midas_r(yy ~ mls(yy, 1, 1) + mls(xx, 3:11, 3, nbeta), start = list(xx = c(1.7, 1, 5)))
