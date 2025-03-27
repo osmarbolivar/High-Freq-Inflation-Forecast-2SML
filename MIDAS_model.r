@@ -1,56 +1,50 @@
-library(midasr)  # loads the midasr package
-library(ggplot2) 
-library(dplyr)  
-library(tidyr)  
+# Load required packages (install if not already installed)
+if (!require(midasr)) install.packages("midasr")
+if (!require(dplyr)) install.packages("dplyr")
+library(midasr)
+library(dplyr)
 
+# Read in the dataset
+data_all <- read.csv("./Data/MIDAS_DATASET.csv", stringsAsFactors = FALSE)
 
-# Read the MIDAS dataset
-midas_data <- read.csv('./Data/MIDAS_DATASET.csv')
-View(midas_data)
+# Separate monthly and weekly observations based on the 'set' variable
+# Monthly observations: set equals "train" or "validation"
+monthly_data <- filter(data_all, set %in% c("train", "validation"))
+# Weekly observations: set equals "test"
+weekly_data  <- filter(data_all, set == "test")
 
-y = na.omit(midas_data$ipc_all)
-typeof(y)
-cat("Observations in dependent variables are", sum(!is.na(y)), "\n")
+# Create a list to hold the series for the MIDAS regression
+# The dependent variable (monthly frequency) is "ipc_all"
+data_list <- list(
+  ipc_all = monthly_data$ipc_all
+)
 
-x = midas_data$tomato_tj[midas_data$set == "test"]
-typeof(y)
-cat("Observations in covariates are", sum(!is.na(x)), "\n")
-cat("Observations when covariates split into 4 weeks:", sum(!is.na(x))/4, "\n")
+# Identify the high-frequency regressors (all variables except "ipc_all" and "set")
+hf_vars <- setdiff(names(data_all), c("ipc_all", "set"))
 
-## Align data
-#nx <- ts(x, start = start(x), frequency = 52)
-nx <- ts(x, start = start(x), frequency = 48)
-ny <- ts(y, start = start(x), frequency = 12)
+# For each high-frequency variable, extract the series from the weekly data.
+# (It is assumed that the weekly observations are ordered chronologically.)
+for (var in hf_vars) {
+  data_list[[var]] <- weekly_data[[var]]
+}
 
-# Plot nx and ny in the same plot
-plot(nx, type = "l", col = "blue", lwd = 2, ylab = "Values", xlab = "Time", main = "nx and ny Time Series")
-lines(ny, col = "red", lwd = 2)
-legend("topright", legend = c("nx", "ny"), col = c("blue", "red"), lty = 1, lwd = 2)
+# Construct the MIDAS regression formula dynamically.
+# Here we use fmls() for each high-frequency regressor.
+# fmls(x, 0:3, 4, nealmon) specifies lags 0 to 3 (4 lags corresponding to 4 weeks per month)
+formula_terms <- paste0("fmls(", hf_vars, ", 0:3, 4, nealmon)")
+midas_formula <- as.formula(paste("ipc_all ~", paste(formula_terms, collapse = " + ")))
 
+# Define starting values for the weight functions.
+# The nealmon specification typically requires 3 parameters; here we use zeros as starting values.
+start_list <- list()
+for (var in hf_vars) {
+  start_list[[var]] <- rep(0, 3)
+}
 
+# Estimate the MIDAS regression model using midas_r.
+# The function will use the monthly y and the weekly high-frequency regressors,
+# taking into account the frequency ratio of 4.
+midas_model <- midas_r(midas_formula, data = data_list, start = start_list)
 
-
-
-
-
-# Define the MIDAS regression model
-midas_model <- midas_r(y ~ mls(x, 0:11, 4, nbeta), start = list(nbeta = c(0.5, 0.5, 0.5)))
-# Display the summary of the model
+# Print a summary of the estimated model
 summary(midas_model)
-
-
-
-## Align data
-nx <- ts(midas_data$ipc_all, start = start(x), frequency = 12)
-ny <- ts(c(rep(NA, 33), yg, NA), start = start(x), frequency = 4)
-
-
-
-## Estimate the models
-beta0 <- midas_r(y ~ mls(y, 1, 1) + mls(x, 3:11, 3, nbeta), start = list(xx = c(1.7, 1, 5)))
-
-
-beta0 <- midas_r(yy ~ mls(yy, 1, 1) + mls(xx, 3:11, 3, nbeta), start = list(xx = c(1.7, 1, 5)))
-coef(beta0)
-
-?mls
